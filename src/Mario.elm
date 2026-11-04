@@ -17,6 +17,19 @@ jumpCutoff = 0.5
 gravity = 0.2
 
 
+--- LAVA PARAMETERS
+lavaHeight=20
+
+lavaPits =
+  [ (150, 250)
+  , (400, 480)
+  , (-300, -200)
+  ]
+
+--mario is in lava if he is on lava's x range
+
+inLava x y=
+      y == 0 && List.any (\(left, right) -> x > left && x < right) lavaPits
 -- MAIN
 
 game =
@@ -49,7 +62,9 @@ view computer mario =
     [ rectangle (rgb 174 238 238) w h  -- sky
     , rectangle (rgb 74 163 41) w 100  -- ground
         |> moveY b
-    , mario.trace
+        ] ++ List.map (lavaShape b) lavaPits
+             ++
+    [mario.trace
         |> pathToPolygonVertices 1.5
         |> polygon black
         |> move 0 (b + 76)
@@ -96,22 +111,25 @@ update computer mario =
 
     newX = mario.x + dt * vx
     newY = max 0 (mario.y + dt * vy)
+    moved=
+        { mario
+          | x = newX
+          , y = newY
+          , vx = vx
+          , vy = (newY - mario.y) / dt
+          , dir =
+              if (toX computer.keyboard) < 0 then
+                Left
+              else if (toX computer.keyboard) > 0 then
+                Right
+              else
+                mario.dir  -- face direction of last movement when standing still
+          , trace = addPointUnlessDuplicate (newX, newY) mario.trace}
   in
-    { mario
-      | x = newX
-      , y = newY
-      , vx = vx
-      , vy = (newY - mario.y) / dt
-      , dir =
-          if (toX computer.keyboard) < 0 then
-            Left
-          else if (toX computer.keyboard) > 0 then
-            Right
-          else
-            mario.dir  -- face direction of last movement when standing still
-      , trace = addPointUnlessDuplicate (newX, newY) mario.trace
-    }
-
+     if inLava newX newY then
+      { moved | x = 0, y = 0, vx = 0, vy = 0, trace = [] }  -- we kill mario and bring him back to the center
+      else
+       moved
 addPointUnlessDuplicate point path =
   if (List.head path) == Just point then
     path
@@ -133,3 +151,7 @@ offsetPath offset points =
 
 pointAdd (x0, y0) (x1, y1) =
   (x0 + x1, y0 + y1)
+
+lavaShape b (left, right) = --helper method for making lava shape
+  rectangle orange (right - left) lavaHeight
+    |> move ((left + right) / 2) (b + 50 - lavaHeight / 2)
